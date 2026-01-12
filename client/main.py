@@ -13,6 +13,7 @@ from PyQt6.QtCore import Qt
 
 from client.network import NetworkClient, ServerInfo
 from client.key_manager import KeyManager
+from client.device_trust import DeviceTrustManager
 from client.ui.login_dialog import LoginDialog
 from client.ui.main_window import MainWindow
 
@@ -28,6 +29,7 @@ class Application:
         self.server_info = ServerInfo(host="localhost", port=9000)
         self.network = NetworkClient(self.server_info)
         self.key_manager = KeyManager()
+        self.device_trust = DeviceTrustManager()
         self.main_window = None
         self.should_exit = False
     
@@ -61,7 +63,7 @@ class Application:
     def _show_login(self) -> bool:
         """显示登录对话框"""
         print("显示登录界面...")
-        login = LoginDialog(self.network, self.key_manager)
+        login = LoginDialog(self.network, self.key_manager, self.device_trust)
         
         if login.exec() != LoginDialog.DialogCode.Accepted:
             self.should_exit = True
@@ -73,7 +75,7 @@ class Application:
     def _show_main_window(self):
         """显示主窗口"""
         print("显示主界面...")
-        self.main_window = MainWindow(self.network, self.key_manager)
+        self.main_window = MainWindow(self.network, self.key_manager, self.device_trust)
         self.main_window.logout_requested.connect(self._on_logout)
         self.main_window.show()
         self.app.exec()

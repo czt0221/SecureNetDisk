@@ -197,6 +197,30 @@ class KeyManager:
             'new_master_key_salt': new_salt.hex()
         }
     
+    def unlock_from_device(self, device_data: dict) -> bool:
+        """
+        从设备信任数据解锁密钥
+        
+        Args:
+            device_data: 从DeviceTrustManager解密的数据
+            
+        Returns:
+            是否成功
+        """
+        try:
+            self.user_keys = UserKeys(
+                user_id=0,  # 设备登录不需要user_id
+                username=device_data['username'],
+                email=device_data['email'],
+                master_key=device_data['master_key'],
+                private_key=device_data['private_key'],
+                public_key=device_data['public_key']
+            )
+            return True
+        except Exception as e:
+            print(f"[KeyManager] 设备解锁失败: {e}")
+            return False
+    
     def lock(self):
         """锁定密钥（清除内存）"""
         self.user_keys = None

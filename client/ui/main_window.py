@@ -34,10 +34,11 @@ class MainWindow(QMainWindow):
     
     logout_requested = pyqtSignal()  # 退出登录信号
     
-    def __init__(self, network, key_manager):
+    def __init__(self, network, key_manager, device_trust=None):
         super().__init__()
         self.network = network
         self.key_manager = key_manager
+        self.device_trust = device_trust
         self.current_path = []  # 当前路径栈
         self.current_group_id = None
         self.files = []
@@ -136,6 +137,23 @@ class MainWindow(QMainWindow):
         """)
         change_pwd_btn.clicked.connect(self._change_password)
         layout.addWidget(change_pwd_btn)
+        
+        # 解除设备信任按钮
+        self.revoke_trust_btn = QPushButton("🔓 解除设备信任")
+        self.revoke_trust_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #f57c00;
+                border: none;
+                padding: 12px 24px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background: #fff3e0;
+            }
+        """)
+        self.revoke_trust_btn.clicked.connect(self._revoke_device_trust)
+        layout.addWidget(self.revoke_trust_btn)
         
         return sidebar
     
@@ -723,6 +741,12 @@ class MainWindow(QMainWindow):
                 )
                 
                 if reset_result.get('success'):
+                    # 自动解除设备信任（密码已更改）
+                    if self.device_trust and self.key_manager.user_keys:
+                        email = self.key_manager.user_keys.email
+                        if email:
+                            self.device_trust.clear_trust(email)
+                    
                     QMessageBox.information(dialog, "成功", "密码修改成功，请使用新密码重新登录")
                     dialog.accept()
                     # 触发退出登录
@@ -736,4 +760,70 @@ class MainWindow(QMainWindow):
         
         confirm_btn.clicked.connect(do_change)
         dialog.exec()
-
+    
+    def _revoke_device_trust(self):
+        """解除设备信任"""
+        from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit
+        
+        if not self.device_trust:
+            QMessageBox.warning(self, "提示", "设备信任功能不可用")
+            return
+        
+        email = self.key_manager.user_keys.email if self.key_manager.user_keys else ""
+        
+        if not self.device_trust.has_trusted_device(email):
+            QMessageBox.information(self, "提示", "当前用户未信任此设备")
+            return
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("解除设备信任")
+        dialog.setFixedSize(400, 200)
+        
+        layout = QVBoxLayout(dialog)
+        
+        layout.addWidget(QLabel(f"确认解除此设备对账号 {email} 的信任？\n解除后，下次登录需要密码。"))
+        layout.addSpacing(10)
+        
+        form = QFormLayout()
+        pwd_input = QLineEdit()
+        pwd_input.setEchoMode(QLineEdit.EchoMode.Password)
+        pwd_input.setPlaceholderText("输入密码以确认")
+        form.addRow("密码验证:", pwd_input)
+        layout.addLayout(form)
+        
+        layout.addSpacing(10)
+        
+        btn_layout = QHBoxLayout()
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(dialog.reject)
+        confirm_btn = QPushButton("确认解除")
+        confirm_btn.setStyleSheet("background: #f57c00; color: white; padding: 8px 16px;")
+        btn_layout.addStretch()
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(confirm_btn)
+        layout.addLayout(btn_layout)
+        
+        def do_revoke():
+            password = pwd_input.text()
+            if not password:
+                QMessageBox.warning(dialog, "提示", "请输入密码")
+                return
+            
+            # 验证密码
+            from auth.password import PasswordManager
+            password_prehash = PasswordManager.prehash_password(password)
+            result = self.network.login_password(
+                self.key_manager.user_keys.username, password_prehash
+            )
+            
+            if not result.get('success'):
+                QMessageBox.critical(dialog, "错误", "密码错误")
+                return
+            
+            # 解除信任
+            self.device_trust.clear_trust(email)
+            QMessageBox.information(dialog, "成功", "设备信任已解除")
+            dialog.accept()
+        
+        confirm_btn.clicked.connect(do_revoke)
+        dialog.exec()
