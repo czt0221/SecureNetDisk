@@ -312,10 +312,9 @@ class LoginDialog(QDialog):
         return page
 
     def _do_email_login(self):
+        """邮箱验证码登录"""
         if not self._ensure_connection():
             return
-            
-        """邮箱验证码登录"""
         email = self.email_input.text().strip()
         code = self.email_code_input.text().strip()
         
