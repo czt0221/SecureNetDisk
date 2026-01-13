@@ -17,7 +17,7 @@ class ClientConfig:
         """Load configuration from client.ini."""
         config = configparser.ConfigParser()
         if os.path.exists(CONFIG_FILE):
-            config.read(CONFIG_FILE)
+            config.read(CONFIG_FILE, encoding="utf-8")
             
             # Network settings
             if "Network" in config:
