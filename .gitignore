@@ -2,10 +2,14 @@ __pycache__/
 *.db
 *.pem
 *.env
+*.ini
 .vscode/
 .DS_Store
 node_modules/
 storage/
+dist/
+build/
+*.spec
 
 .gemini/
 .specify/
