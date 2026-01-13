@@ -1,0 +1,14 @@
+__pycache__/
+*.db
+*.pem
+*.env
+.vscode/
+.DS_Store
+node_modules/
+storage/
+
+.gemini/
+.specify/
+.tmp/
+GEMINI.md
+specs/
