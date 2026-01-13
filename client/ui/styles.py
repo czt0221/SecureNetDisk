@@ -494,6 +494,7 @@ class Icons:
     # 导航
     HOME = "🏠"
     GROUP = "👥"
+    INVITE = "📬"
     TRASH = "🗑️"
     SETTINGS = "⚙️"
     
