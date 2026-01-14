@@ -1,11 +1,13 @@
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRect, QPropertyAnimation, QEasingCurve
+import math
+
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRect
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QWidget, QMessageBox, QStackedWidget,
     QGroupBox, QFormLayout, QComboBox, QDialogButtonBox
 )
-from PyQt6.QtGui import QIcon, QFont, QPainter, QLinearGradient, QColor, QPainterPath
-from .styles import StyleSheet
+from PyQt6.QtGui import QIcon, QFont, QColor, QPainter, QLinearGradient, QPainterPath
+from ui.styles import StyleSheet
 from client.config import config as app_config
 
 
@@ -98,7 +100,6 @@ class GradientWaveWidget(QWidget):
 
         painter.end()
 
-
 class LoginDialog(QDialog):
     """登录对话框"""
     login_success = pyqtSignal(dict)
@@ -119,53 +120,82 @@ class LoginDialog(QDialog):
         QTimer.singleShot(100, self._try_initial_connect)
 
     def _init_ui(self):
+        # 主布局
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
+        main_layout.setContentsMargins(0, 0, 0, 0)  # 去除边距以便渐变区域填充
         main_layout.setSpacing(0)
 
-        # 动态渐变区域
+        # 渐变波浪背景区域
         self.gradient_widget = GradientWaveWidget()
-        self.gradient_widget.setMinimumHeight(180)  # 设置渐变区域高度
-        gradient_layout = QVBoxLayout(self.gradient_widget)
-        gradient_layout.setContentsMargins(40, 40, 40, 30)
-        gradient_layout.setSpacing(12)
+        # 渐变区域的高度约为整个对话框的1/3
+        gradient_height = int(self.height() * 0.3)
+        self.gradient_widget.setFixedHeight(gradient_height)
 
-        # Logo
+        # 渐变区域容器，包含内容
+        gradient_container = QWidget()
+        gradient_container.setObjectName("gradientContainer")
+        gradient_layout = QVBoxLayout(gradient_container)
+        gradient_layout.setContentsMargins(0, 0, 0, 0)
+        gradient_layout.setSpacing(0)
+
+        # 在渐变区域上方添加顶部间距
+        gradient_layout.addSpacing(20)
+
+        # 渐变区域的内容布局
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(40, 0, 40, 20)  # 左右边距40px，底部边距20px
+        content_layout.setSpacing(16)
+
         logo = QLabel("🔐 安全网盘")
         logo.setObjectName("logoLabel")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo.setStyleSheet("""
-            QLabel#logoLabel {
-                font-size: 32px;
-                font-weight: 600;
+            QLabel {
+                font-size: 28px;
+                font-weight: bold;
                 color: black;
-                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             }
         """)
-        gradient_layout.addWidget(logo)
+        content_layout.addWidget(logo)
 
-        # 连接状态标签 - 使用白色半透明
+        # 连接状态标签
         self.connection_status = QLabel("⚪ 正在连接服务器...")
         self.connection_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.connection_status.setStyleSheet("""
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 13px;
-            font-weight: 500;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 6px 12px;
-            border-radius: 12px;
+            QLabel {
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 14px;
+                font-weight: 500;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
         """)
-        gradient_layout.addWidget(self.connection_status)
+        content_layout.addWidget(self.connection_status)
 
+        content_layout.addSpacing(10)
+
+        gradient_layout.addLayout(content_layout)
         gradient_layout.addStretch()
-        main_layout.addWidget(self.gradient_widget)
 
-        # 内容区域
+        # 将渐变部件设置为渐变容器的背景
+        gradient_container.background_widget = self.gradient_widget
+        main_layout.addWidget(gradient_container)
+
+        # 创建白色内容区域（覆盖剩余部分）
         content_widget = QWidget()
-        content_widget.setStyleSheet("background: white;")
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(40, 30, 40, 40)
-        content_layout.setSpacing(20)
+        content_widget.setObjectName("contentWidget")
+        content_widget.setStyleSheet("""
+            QWidget#contentWidget {
+                background: white;
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                margin-top: -5px;
+            }
+        """)
+
+        content_layout_inner = QVBoxLayout(content_widget)
+        content_layout_inner.setContentsMargins(40, 30, 40, 40)
+        content_layout_inner.setSpacing(16)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._create_login_page())  # 0 - 密码登录
@@ -175,36 +205,118 @@ class LoginDialog(QDialog):
 
         # 页面切换时刷新UI状态
         self.stack.currentChanged.connect(self._on_page_changed)
-        content_layout.addWidget(self.stack)
+        content_layout_inner.addWidget(self.stack)
 
         # 右下角设置按钮
         settings_btn = QPushButton("⚙️")
         settings_btn.setObjectName("settingsButton")
-        settings_btn.setFixedSize(36, 36)
+        settings_btn.setFixedSize(40, 40)
+        # 创建字体并设置大小
         font = QFont()
-        font.setPointSize(16)
+        font.setPointSize(20)  # 设置字体大小为20
         settings_btn.setFont(font)
-        settings_btn.setStyleSheet("""
-            QPushButton#settingsButton {
-                background: #f8f9fa;
-                border: 1px solid #dadce0;
-                border-radius: 18px;
-                color: #5f6368;
-            }
-            QPushButton#settingsButton:hover {
-                background: #f1f3f4;
-                border-color: #bdc1c6;
-            }
-        """)
         settings_btn.clicked.connect(self._show_settings_dialog)
 
-        # 将按钮放在右下角
+        # 将按钮放在布局的右下角
+        content_layout_inner.addStretch()
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(settings_btn)
-        content_layout.addLayout(button_layout)
+        content_layout_inner.addLayout(button_layout)
 
         main_layout.addWidget(content_widget)
+
+
+        # 初始化动画状态
+        gradient_container._animation_time = 0.0
+
+        # 初始化颜色数组
+        gradient_container._colors = [
+            QColor("#132843"),  # 深蓝色
+            QColor("#3966A2"),  # 蓝色
+            QColor("#6191D3"),  # 浅蓝色
+            QColor("#D6DEEB"),  # 淡蓝色
+            QColor("#F8F6F6")  # 近白色
+        ]
+
+        # 创建动画定时器
+        gradient_container._timer = QTimer(gradient_container)
+        gradient_container._timer.timeout.connect(lambda: (
+            setattr(gradient_container, '_animation_time',
+                    (gradient_container._animation_time + 0.005) % 1.0),
+            gradient_container.update()
+        ))
+        gradient_container._timer.start(16)  # 约60fps
+
+        # 重写渐变容器的绘制事件
+        def gradient_container_paint_event(event):
+            # 直接绘制渐变背景，不通过render
+            painter = QPainter(gradient_container)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            # 获取容器尺寸
+            width = gradient_container.width()
+            height = gradient_container.height()
+
+            # 创建主渐变
+            main_gradient = QLinearGradient(0, 0, width, height)
+
+            # 动态计算偏移量 - 需要保存偏移状态
+            if not hasattr(gradient_container, '_wave_offset'):
+                gradient_container._wave_offset = 0
+                gradient_container._wave_timer = QTimer(gradient_container)
+                gradient_container._wave_timer.timeout.connect(
+                    lambda: (
+                        setattr(gradient_container, '_wave_offset',
+                                (gradient_container._wave_offset + 0.5) % 100),
+                        gradient_container.update()
+                    )
+                )
+                gradient_container._wave_timer.start(50)
+
+            offset = gradient_container._wave_offset
+            colors = [
+                QColor("#132843"),  # Color 01
+                QColor("#3966A2"),  # Color 02
+                QColor("#6191D3"),  # Color 03
+                QColor("#D6DEEB"),  # Color 04
+                QColor("#F8F6F6")  # Color 05
+            ]
+
+            # 计算颜色停止点，制造波浪效果
+            num_colors = len(colors)
+            for i in range(num_colors):
+                # 计算波浪偏移位置
+                wave_pos = (i / (num_colors - 1) * 100 + offset) % 100 / 100
+                main_gradient.setColorAt(wave_pos, colors[i])
+
+                # 添加中间渐变点使过渡更平滑
+                if i < num_colors - 1:
+                    mid_pos = ((i + 0.5) / (num_colors - 1) * 100 + offset) % 100 / 100
+                    # 创建中间颜色（混合两个相邻颜色）
+                    mid_color = QColor(
+                        (colors[i].red() + colors[i + 1].red()) // 2,
+                        (colors[i].green() + colors[i + 1].green()) // 2,
+                        (colors[i].blue() + colors[i + 1].blue()) // 2
+                    )
+                    main_gradient.setColorAt(mid_pos, mid_color)
+
+            # 填充渐变
+            painter.fillRect(0, 0, width, height, main_gradient)
+
+            # 调用原始的paintEvent绘制内容
+            QWidget.paintEvent(gradient_container, event)
+
+        gradient_container.paintEvent = gradient_container_paint_event
+
+
+    def resizeEvent(self, event):
+        """处理窗口大小变化"""
+        super().resizeEvent(event)
+        # 动态调整渐变区域高度
+        gradient_height = int(self.height() * 0.3)
+        self.gradient_widget.setFixedHeight(gradient_height)
+        self.gradient_widget.update()
 
     def _show_settings_dialog(self):
         """显示服务器设置对话框"""
@@ -256,7 +368,7 @@ class LoginDialog(QDialog):
         host_container = QWidget()
         host_layout = QHBoxLayout(host_container)
         host_layout.setContentsMargins(0, 0, 0, 0)
-        host_layout.addWidget(self.host_combo, alignment=Qt.AlignmentFlag.AlignLeft)
+        host_layout.addWidget(self.host_combo, alignment=Qt.AlignmentFlag.AlignCenter)
 
         form_layout.addRow("地址端口:", host_container)
         layout.addLayout(form_layout)
@@ -288,7 +400,7 @@ class LoginDialog(QDialog):
 
         # 按钮框
         button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Cancel
+             QDialogButtonBox.StandardButton.Cancel
         )
         button_box.accepted.connect(lambda: self._apply_settings(dialog))
         button_box.rejected.connect(dialog.reject)
@@ -406,24 +518,10 @@ class LoginDialog(QDialog):
         """更新连接状态标签"""
         if connected:
             self.connection_status.setText(f"🟢 {message}")
-            self.connection_status.setStyleSheet("""
-                color: rgba(255, 255, 255, 0.95);
-                font-size: 13px;
-                font-weight: 600;
-                background: rgba(52, 168, 83, 0.7);
-                padding: 6px 12px;
-                border-radius: 12px;
-            """)
+            self.connection_status.setStyleSheet("color: #34a853; font-size: 12px; font-weight: bold;")
         else:
             self.connection_status.setText(f"🔴 {message}")
-            self.connection_status.setStyleSheet("""
-                color: rgba(255, 255, 255, 0.95);
-                font-size: 13px;
-                font-weight: 600;
-                background: rgba(234, 67, 53, 0.7);
-                padding: 6px 12px;
-                border-radius: 12px;
-            """)
+            self.connection_status.setStyleSheet("color: #ea4335; font-size: 12px; font-weight: bold;")
 
     def _ensure_connection(self) -> bool:
         """确保已连接到服务器（使用当前配置）"""
@@ -444,34 +542,22 @@ class LoginDialog(QDialog):
     def _create_login_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(16)
+        layout.setContentsMargins(0, 1, 0, 0)
+        layout.setSpacing(12)
 
-        # 页面标题
-        title = QLabel("登录您的账号")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: 500;
-                color: #202124;
-                margin-bottom: 8px;
-            }
-        """)
-        layout.addWidget(title)
+        layout.addWidget(QLabel("登录您的账号"))
 
-        # 用户名输入
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("用户名")
         if app_config.last_username:
             self.username_input.setText(app_config.last_username)
         layout.addWidget(self.username_input)
 
-        # 密码输入
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("密码")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.password_input)
 
-        # 登录按钮
         login_btn = QPushButton("登录")
         login_btn.setObjectName("loginButton")
         login_btn.clicked.connect(self._do_login)
@@ -481,21 +567,20 @@ class LoginDialog(QDialog):
         email_login_btn = QPushButton("📧 使用邮箱验证码登录")
         email_login_btn.setObjectName("linkButton")
         email_login_btn.clicked.connect(lambda: self.stack.setCurrentIndex(3))
-        layout.addWidget(email_login_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(email_login_btn)
 
         # 忘记密码按钮
-        forgot_btn = QPushButton("忘记密码？")
+        forgot_btn = QPushButton("忘记密码")
         forgot_btn.setObjectName("linkButton")
         forgot_btn.clicked.connect(lambda: self.stack.setCurrentIndex(2))
-        layout.addWidget(forgot_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(forgot_btn)
 
         layout.addStretch()
 
-        # 注册链接
-        reg_btn = QPushButton("还没有账号？立即注册")
+        reg_btn = QPushButton("没有账号？点击注册")
         reg_btn.setObjectName("linkButton")
         reg_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
-        layout.addWidget(reg_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(reg_btn)
 
         return page
 
@@ -540,42 +625,21 @@ class LoginDialog(QDialog):
         """创建邮箱验证码登录页面"""
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
-        # 返回按钮
         back_btn = QPushButton("← 返回密码登录")
         back_btn.setObjectName("linkButton")
         back_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         layout.addWidget(back_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        # 页面标题
-        title = QLabel("📧 邮箱验证码登录")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: 500;
-                color: #202124;
-                margin-bottom: 8px;
-            }
-        """)
-        layout.addWidget(title)
+        layout.addWidget(QLabel("📧 邮箱验证码登录"))
 
-        # 已信任用户提示
+        # 可更新的已信任用户提示
         self.email_login_trust_hint = QLabel("")
-        self.email_login_trust_hint.setStyleSheet("""
-            QLabel {
-                color: #1a73e8;
-                font-size: 12px;
-                background: #e8f0fe;
-                padding: 8px 12px;
-                border-radius: 6px;
-                border-left: 3px solid #1a73e8;
-            }
-        """)
+        self.email_login_trust_hint.setStyleSheet("color: #1a73e8; font-size: 12px;")
         self.email_login_trust_hint.setWordWrap(True)
         layout.addWidget(self.email_login_trust_hint)
 
-        # 邮箱输入
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText("邮箱地址")
         layout.addWidget(self.email_input)
@@ -588,19 +652,6 @@ class LoginDialog(QDialog):
         code_layout.addWidget(self.email_code_input, 2)
 
         self.get_code_btn = QPushButton("获取验证码")
-        self.get_code_btn.setStyleSheet("""
-            QPushButton {
-                background: #f1f3f4;
-                border: 1px solid #dadce0;
-                border-radius: 4px;
-                padding: 8px 12px;
-                color: #5f6368;
-            }
-            QPushButton:hover {
-                background: #e8eaed;
-                border-color: #bdc1c6;
-            }
-        """)
         self.get_code_btn.clicked.connect(self._request_email_code)
         code_layout.addWidget(self.get_code_btn, 1)
         layout.addLayout(code_layout)
@@ -611,17 +662,9 @@ class LoginDialog(QDialog):
         self.email_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.email_password_input)
 
-        # 信任状态提示
+        # 提示：输入邮箱后会动态判断是否需要密码
         self.trust_hint_label = QLabel("")
-        self.trust_hint_label.setStyleSheet("""
-            QLabel {
-                color: #5f6368;
-                font-size: 12px;
-                padding: 4px 8px;
-                background: #f8f9fa;
-                border-radius: 4px;
-            }
-        """)
+        self.trust_hint_label.setStyleSheet("color: #666; font-size: 11px;")
         layout.addWidget(self.trust_hint_label)
 
         # 邮箱输入变化时更新提示
@@ -630,7 +673,6 @@ class LoginDialog(QDialog):
         # 初始化信任状态
         self._refresh_trust_ui()
 
-        # 登录按钮
         email_login_btn = QPushButton("验证码登录")
         email_login_btn.setObjectName("loginButton")
         email_login_btn.clicked.connect(self._do_email_login)
@@ -648,7 +690,7 @@ class LoginDialog(QDialog):
         # 更新邮箱登录页的已信任用户提示
         if hasattr(self, 'email_login_trust_hint'):
             if trusted_emails:
-                self.email_login_trust_hint.setText(f"✅ 已信任用户: {', '.join(trusted_emails)}\n可直接使用验证码登录")
+                self.email_login_trust_hint.setText(f"已信任用户: {', '.join(trusted_emails)}")
                 self.email_login_trust_hint.show()
                 # 如果只有一个信任用户且输入框为空，自动填充
                 if len(trusted_emails) == 1 and not self.email_input.text().strip():
@@ -660,7 +702,7 @@ class LoginDialog(QDialog):
         # 更新密码恢复页的信任提示
         if hasattr(self, 'recovery_email_hint'):
             if trusted_emails:
-                self.recovery_email_hint.setText(f"📧 可用信任邮箱: {', '.join(trusted_emails)}")
+                self.recovery_email_hint.setText(f"可用邮箱: {', '.join(trusted_emails)}")
             else:
                 self.recovery_email_hint.setText("⚠️ 此设备无信任用户，无法使用此方式")
 
@@ -728,73 +770,39 @@ class LoginDialog(QDialog):
         """更新信任状态提示"""
         email = self.email_input.text().strip()
         if self.device_trust and email and self.device_trust.has_trusted_device(email):
-            self.trust_hint_label.setText("✓ 此邮箱已信任此设备，无需密码")
-            self.trust_hint_label.setStyleSheet("""
-                QLabel {
-                    color: #1a73e8;
-                    font-size: 12px;
-                    padding: 4px 8px;
-                    background: #e8f0fe;
-                    border-radius: 4px;
-                    border-left: 3px solid #1a73e8;
-                }
-            """)
+            self.trust_hint_label.setText("✓ 此邮箱已信任，无需密码")
+            self.trust_hint_label.setStyleSheet("color: #1a73e8; font-size: 11px;")
             self.email_password_input.setEnabled(False)
-            self.email_password_input.setPlaceholderText("密码（已信任设备无需输入）")
         else:
             self.trust_hint_label.setText("此邮箱未信任此设备，需要输入密码")
-            self.trust_hint_label.setStyleSheet("""
-                QLabel {
-                    color: #5f6368;
-                    font-size: 12px;
-                    padding: 4px 8px;
-                    background: #f8f9fa;
-                    border-radius: 4px;
-                }
-            """)
+            self.trust_hint_label.setStyleSheet("color: #666; font-size: 11px;")
             self.email_password_input.setEnabled(True)
-            self.email_password_input.setPlaceholderText("密码（非信任设备需要）")
 
     def _create_register_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
-        # 返回按钮
-        back_btn = QPushButton("← 返回登录")
+        back_btn = QPushButton("← 返回")
         back_btn.setObjectName("linkButton")
         back_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         layout.addWidget(back_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        # 页面标题
-        title = QLabel("创建新账号")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: 500;
-                color: #202124;
-                margin-bottom: 8px;
-            }
-        """)
-        layout.addWidget(title)
+        layout.addWidget(QLabel("创建账号"))
 
-        # 用户名输入
         self.reg_username = QLineEdit()
         self.reg_username.setPlaceholderText("用户名")
         layout.addWidget(self.reg_username)
 
-        # 邮箱输入
         self.reg_email = QLineEdit()
         self.reg_email.setPlaceholderText("邮箱")
         layout.addWidget(self.reg_email)
 
-        # 密码输入
         self.reg_password = QLineEdit()
         self.reg_password.setPlaceholderText("密码")
         self.reg_password.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.reg_password)
 
-        # 注册按钮
         reg_btn = QPushButton("注册")
         reg_btn.setObjectName("loginButton")
         reg_btn.clicked.connect(self._do_register)
@@ -807,70 +815,28 @@ class LoginDialog(QDialog):
         """创建密码恢复页面"""
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
-        # 返回按钮
         back_btn = QPushButton("← 返回登录")
         back_btn.setObjectName("linkButton")
         back_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         layout.addWidget(back_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        # 页面标题
-        title = QLabel("🔑 重置密码")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: 500;
-                color: #202124;
-                margin-bottom: 8px;
-            }
-        """)
-        layout.addWidget(title)
+        layout.addWidget(QLabel("🔑 重置密码"))
 
         # 方式选择
         self.recovery_method_label = QLabel("请选择重置方式：")
-        self.recovery_method_label.setStyleSheet("font-weight: 500; color: #5f6368;")
         layout.addWidget(self.recovery_method_label)
 
         method_layout = QHBoxLayout()
         self.recovery_key_radio = QPushButton("恢复密钥")
         self.recovery_key_radio.setCheckable(True)
         self.recovery_key_radio.setChecked(True)
-        self.recovery_key_radio.setStyleSheet("""
-            QPushButton {
-                background: #f1f3f4;
-                border: 1px solid #dadce0;
-                border-radius: 4px;
-                padding: 8px 16px;
-                color: #5f6368;
-            }
-            QPushButton:checked {
-                background: #e8f0fe;
-                border-color: #1a73e8;
-                color: #1a73e8;
-                font-weight: 500;
-            }
-        """)
         self.recovery_key_radio.clicked.connect(lambda: self._switch_recovery_method('key'))
         method_layout.addWidget(self.recovery_key_radio)
 
         self.email_code_radio = QPushButton("邮箱验证码（信任设备）")
         self.email_code_radio.setCheckable(True)
-        self.email_code_radio.setStyleSheet("""
-            QPushButton {
-                background: #f1f3f4;
-                border: 1px solid #dadce0;
-                border-radius: 4px;
-                padding: 8px 16px;
-                color: #5f6368;
-            }
-            QPushButton:checked {
-                background: #e8f0fe;
-                border-color: #1a73e8;
-                color: #1a73e8;
-                font-weight: 500;
-            }
-        """)
         self.email_code_radio.clicked.connect(lambda: self._switch_recovery_method('email'))
         method_layout.addWidget(self.email_code_radio)
         layout.addLayout(method_layout)
@@ -879,7 +845,6 @@ class LoginDialog(QDialog):
         self.recovery_key_container = QWidget()
         key_layout = QVBoxLayout(self.recovery_key_container)
         key_layout.setContentsMargins(0, 0, 0, 0)
-        key_layout.setSpacing(12)
 
         self.recovery_username = QLineEdit()
         self.recovery_username.setPlaceholderText("用户名")
@@ -894,7 +859,6 @@ class LoginDialog(QDialog):
         self.recovery_email_container = QWidget()
         email_layout = QVBoxLayout(self.recovery_email_container)
         email_layout.setContentsMargins(0, 0, 0, 0)
-        email_layout.setSpacing(12)
 
         self.recovery_email_username = QLineEdit()
         self.recovery_email_username.setPlaceholderText("用户名")
@@ -911,34 +875,12 @@ class LoginDialog(QDialog):
         code_row.addWidget(self.recovery_code_input, 2)
 
         self.recovery_get_code_btn = QPushButton("获取验证码")
-        self.recovery_get_code_btn.setStyleSheet("""
-            QPushButton {
-                background: #f1f3f4;
-                border: 1px solid #dadce0;
-                border-radius: 4px;
-                padding: 8px 12px;
-                color: #5f6368;
-            }
-            QPushButton:hover {
-                background: #e8eaed;
-                border-color: #bdc1c6;
-            }
-        """)
         self.recovery_get_code_btn.clicked.connect(self._request_recovery_code)
         code_row.addWidget(self.recovery_get_code_btn, 1)
         email_layout.addLayout(code_row)
 
         self.recovery_email_hint = QLabel("")
-        self.recovery_email_hint.setStyleSheet("""
-            QLabel {
-                color: #5f6368;
-                font-size: 12px;
-                padding: 8px 12px;
-                background: #f8f9fa;
-                border-radius: 6px;
-            }
-        """)
-        self.recovery_email_hint.setWordWrap(True)
+        self.recovery_email_hint.setStyleSheet("color: #666; font-size: 11px;")
         email_layout.addWidget(self.recovery_email_hint)
 
         layout.addWidget(self.recovery_email_container)
@@ -955,7 +897,6 @@ class LoginDialog(QDialog):
         self.confirm_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.confirm_password_input)
 
-        # 重置按钮
         reset_btn = QPushButton("重置密码")
         reset_btn.setObjectName("loginButton")
         reset_btn.clicked.connect(self._do_recovery)
@@ -980,7 +921,7 @@ class LoginDialog(QDialog):
             if self.device_trust:
                 trusted = self.device_trust.get_trusted_emails()
                 if trusted:
-                    self.recovery_email_hint.setText(f"📧 可用信任邮箱: {', '.join(trusted)}")
+                    self.recovery_email_hint.setText(f"可用邮箱: {', '.join(trusted)}")
                 else:
                     self.recovery_email_hint.setText("⚠️ 此设备无信任用户，无法使用此方式")
 
@@ -1262,5 +1203,3 @@ class LoginDialog(QDialog):
             self.stack.setCurrentIndex(0)
         else:
             QMessageBox.critical(self, "错误", reset_result.get('error', '密码重置失败'))
-
-
