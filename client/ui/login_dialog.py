@@ -1,13 +1,105 @@
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QColor, QPainter, QLinearGradient, QPainterPath, QFont
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QWidget, QMessageBox, QStackedWidget,
-    QGroupBox, QFormLayout, QComboBox
+    QGroupBox, QFormLayout, QComboBox, QDialogButtonBox
 )
 from PyQt6.QtGui import QIcon, QPixmap
 from pathlib import Path
 from .styles import StyleSheet
 from client.config import config as app_config
+
+class GradientWaveWidget(QWidget):
+    """动态波浪渐变背景部件"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.colors = [
+            QColor("#132843"),  # Color 01
+            QColor("#3966A2"),  # Color 02
+            QColor("#6191D3"),  # Color 03
+            QColor("#D6DEEB"),  # Color 04
+            QColor("#F8F6F6")  # Color 05
+        ]
+        self.offset = 0
+        self.wave_speed = 0.5
+        self.wave_height = 20
+
+        # 启动动画定时器
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_wave)
+        self.timer.start(50)  # 20 FPS
+
+    def update_wave(self):
+        """更新波浪偏移量"""
+        self.offset += self.wave_speed
+        if self.offset > 100:  # 重置偏移量保持平滑循环
+            self.offset = 0
+        self.update()
+
+    def paintEvent(self, event):
+        """绘制波浪渐变背景"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+
+        # 创建主渐变（从上到下）
+        main_gradient = QLinearGradient(0, 0, width, height)
+
+        # 计算颜色停止点，制造波浪效果
+        num_colors = len(self.colors)
+        for i in range(num_colors):
+            # 计算波浪偏移位置
+            wave_pos = (i / (num_colors - 1) * 100 + self.offset) % 100 / 100
+            main_gradient.setColorAt(wave_pos, self.colors[i])
+
+            # 添加一些中间渐变点使过渡更平滑
+            if i < num_colors - 1:
+                mid_pos = ((i + 0.5) / (num_colors - 1) * 100 + self.offset) % 100 / 100
+                # 创建中间颜色（混合两个相邻颜色）
+                mid_color = QColor(
+                    (self.colors[i].red() + self.colors[i + 1].red()) // 2,
+                    (self.colors[i].green() + self.colors[i + 1].green()) // 2,
+                    (self.colors[i].blue() + self.colors[i + 1].blue()) // 2
+                )
+                main_gradient.setColorAt(mid_pos, mid_color)
+
+        # 填充渐变
+        painter.fillRect(0, 0, width, height, main_gradient)
+
+        # 添加一些波浪曲线
+        painter.setPen(Qt.PenStyle.NoPen)
+        wave_color = QColor(255, 255, 255, 30)  # 半透明白色
+
+        for i in range(3):  # 画3层波浪
+            path_height = self.wave_height * (i + 1)
+            wave_color.setAlpha(40 - i * 10)
+            painter.setBrush(wave_color)
+
+            # 创建波浪路径
+            painter.save()
+            painter.translate(-self.offset * 2 * (i + 1), height - path_height)
+
+            wave_width = width * 2
+            wave_path = QPainterPath()
+            wave_path.moveTo(0, 0)
+
+            for x in range(0, wave_width + 1, 20):
+                y = path_height * 0.5 * (1 + 0.5 * (i + 1) *
+                                         (0.5 * (x / 50 + self.offset / 10) % 6.28))
+                wave_path.lineTo(x, y)
+
+            wave_path.lineTo(wave_width, 0)
+            wave_path.lineTo(0, 0)
+            painter.drawPath(wave_path)
+            painter.restore()
+
+        painter.end()
+
+
 
 class LoginDialog(QDialog):
     """登录对话框"""
@@ -29,6 +121,45 @@ class LoginDialog(QDialog):
         QTimer.singleShot(100, self._try_initial_connect)
     
     def _init_ui(self):
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)  # 去除边距以便渐变区域填充
+        main_layout.setSpacing(0)
+
+        # 渐变波浪背景区域
+        self.gradient_widget = GradientWaveWidget()
+        # 渐变区域的高度约为整个对话框的1/3
+        gradient_height = int(self.height() * 0.3)
+        self.gradient_widget.setFixedHeight(gradient_height)
+
+        # 渐变区域容器，包含内容
+        gradient_container = QWidget()
+        gradient_container.setObjectName("gradientContainer")
+        gradient_layout = QVBoxLayout(gradient_container)
+        gradient_layout.setContentsMargins(0, 0, 0, 0)
+        gradient_layout.setSpacing(0)
+
+        # 在渐变区域上方添加顶部间距
+        gradient_layout.addSpacing(20)
+
+        # 渐变区域的内容布局
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(40, 0, 40, 20)  # 左右边距40px，底部边距20px
+        content_layout.setSpacing(16)
+
+        logo = QLabel("🔐 安全网盘")
+        logo.setObjectName("logoLabel")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet("""
+            QLabel {
+                font-size: 28px;
+                font-weight: bold;
+                color: black;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+        """)
+        content_layout.addWidget(logo)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(16)
@@ -55,97 +186,379 @@ class LoginDialog(QDialog):
         # 连接状态标签
         self.connection_status = QLabel("⚪ 正在连接服务器...")
         self.connection_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.connection_status.setStyleSheet("color: #5f6368; font-size: 12px;")
-        layout.addWidget(self.connection_status)
-        
-        layout.addSpacing(10)
-        
+        self.connection_status.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 14px;
+                font-weight: 500;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+        """)
+        content_layout.addWidget(self.connection_status)
+
+        content_layout.addSpacing(10)
+
+        gradient_layout.addLayout(content_layout)
+        gradient_layout.addStretch()
+
+        # 将渐变部件设置为渐变容器的背景
+        gradient_container.background_widget = self.gradient_widget
+        main_layout.addWidget(gradient_container)
+
+        # 创建白色内容区域（覆盖剩余部分）
+        content_widget = QWidget()
+        content_widget.setObjectName("contentWidget")
+        content_widget.setStyleSheet("""
+            QWidget#contentWidget {
+                background: white;
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                margin-top: -5px;
+            }
+        """)
+
+        content_layout_inner = QVBoxLayout(content_widget)
+        content_layout_inner.setContentsMargins(40, 30, 40, 40)
+        content_layout_inner.setSpacing(16)
+
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._create_login_page())      # 0 - 密码登录
-        self.stack.addWidget(self._create_register_page())   # 1 - 注册
-        self.stack.addWidget(self._create_recovery_page())   # 2 - 恢复密码
-        self.stack.addWidget(self._create_email_login_page()) # 3 - 邮箱验证码登录
-        
+        self.stack.addWidget(self._create_login_page())  # 0 - 密码登录
+        self.stack.addWidget(self._create_register_page())  # 1 - 注册
+        self.stack.addWidget(self._create_recovery_page())  # 2 - 恢复密码
+        self.stack.addWidget(self._create_email_login_page())  # 3 - 邮箱验证码登录
+
         # 页面切换时刷新UI状态
         self.stack.currentChanged.connect(self._on_page_changed)
-        layout.addWidget(self.stack)
+        content_layout_inner.addWidget(self.stack)
+
+        # 右下角设置按钮
+        settings_btn = QPushButton("⚙️")
+        settings_btn.setObjectName("settingsButton")
+        settings_btn.setFixedSize(40, 40)
+        # 创建字体并设置大小
+        font = QFont()
+        font.setPointSize(20)  # 设置字体大小为20
+        settings_btn.setFont(font)
+        settings_btn.clicked.connect(self._show_settings_dialog)
+
+        # 将按钮放在布局的右下角
+        content_layout_inner.addStretch()
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(settings_btn)
+        content_layout_inner.addLayout(button_layout)
+
+        main_layout.addWidget(content_widget)
+
+
+        # 初始化动画状态
+        gradient_container._animation_time = 0.0
+
+        # 初始化颜色数组
+        gradient_container._colors = [
+            QColor("#132843"),  # 深蓝色
+            QColor("#3966A2"),  # 蓝色
+            QColor("#6191D3"),  # 浅蓝色
+            QColor("#D6DEEB"),  # 淡蓝色
+            QColor("#F8F6F6")  # 近白色
+        ]
+
+        # 创建动画定时器
+        gradient_container._timer = QTimer(gradient_container)
+        gradient_container._timer.timeout.connect(lambda: (
+            setattr(gradient_container, '_animation_time',
+                    (gradient_container._animation_time + 0.005) % 1.0),
+            gradient_container.update()
+        ))
+        gradient_container._timer.start(16)  # 约60fps
+
+        # 重写渐变容器的绘制事件
+        def gradient_container_paint_event(event):
+            # 直接绘制渐变背景，不通过render
+            painter = QPainter(gradient_container)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            # 获取容器尺寸
+            width = gradient_container.width()
+            height = gradient_container.height()
+
+            # 创建主渐变
+            main_gradient = QLinearGradient(0, 0, width, height)
+
+            # 动态计算偏移量 - 需要保存偏移状态
+            if not hasattr(gradient_container, '_wave_offset'):
+                gradient_container._wave_offset = 0
+                gradient_container._wave_timer = QTimer(gradient_container)
+                gradient_container._wave_timer.timeout.connect(
+                    lambda: (
+                        setattr(gradient_container, '_wave_offset',
+                                (gradient_container._wave_offset + 0.5) % 100),
+                        gradient_container.update()
+                    )
+                )
+                gradient_container._wave_timer.start(50)
+
+            offset = gradient_container._wave_offset
+            colors = [
+                QColor("#132843"),  # Color 01
+                QColor("#3966A2"),  # Color 02
+                QColor("#6191D3"),  # Color 03
+                QColor("#D6DEEB"),  # Color 04
+                QColor("#F8F6F6")  # Color 05
+            ]
+
+            # 计算颜色停止点，制造波浪效果
+            num_colors = len(colors)
+            for i in range(num_colors):
+                # 计算波浪偏移位置
+                wave_pos = (i / (num_colors - 1) * 100 + offset) % 100 / 100
+                main_gradient.setColorAt(wave_pos, colors[i])
+
+                # 添加中间渐变点使过渡更平滑
+                if i < num_colors - 1:
+                    mid_pos = ((i + 0.5) / (num_colors - 1) * 100 + offset) % 100 / 100
+                    # 创建中间颜色（混合两个相邻颜色）
+                    mid_color = QColor(
+                        (colors[i].red() + colors[i + 1].red()) // 2,
+                        (colors[i].green() + colors[i + 1].green()) // 2,
+                        (colors[i].blue() + colors[i + 1].blue()) // 2
+                    )
+                    main_gradient.setColorAt(mid_pos, mid_color)
+
+            # 填充渐变
+            painter.fillRect(0, 0, width, height, main_gradient)
+
+            # 调用原始的paintEvent绘制内容
+            QWidget.paintEvent(gradient_container, event)
+
+        gradient_container.paintEvent = gradient_container_paint_event
+
+    def resizeEvent(self, event):
+        """处理窗口大小变化"""
+        super().resizeEvent(event)
+        # 动态调整渐变区域高度
+        gradient_height = int(self.height() * 0.3)
+        self.gradient_widget.setFixedHeight(gradient_height)
+        self.gradient_widget.update()
+
+    def _show_settings_dialog(self):
+        """显示服务器设置对话框"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("服务器设置")
+        dialog.setFixedSize(500, 220)  # 稍微增大对话框宽度
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(16)
+
+        # 居中标题
+        title_label = QLabel("服务器设置")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 500;
+                color: #202124;
+                margin-bottom: 8px;
+            }
+        """)
+        layout.addWidget(title_label)
+
+        # 服务器设置表单
+        form_layout = QFormLayout()
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignCenter)  # 表单居中
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)  # 标签右对齐
+
+        self.host_combo = QComboBox()
+        self.host_combo.setEditable(True)
+        self.host_combo.setPlaceholderText("服务器地址和端口 (例如: 127.0.0.1:5000)")
+        self.host_combo.setMinimumWidth(300)  # 设置最小宽度
+        self.host_combo.setMaximumWidth(400)  # 设置最大宽度
+
+        # 填充历史记录
+        if app_config.recent_hosts:
+            self.host_combo.addItems(app_config.recent_hosts)
+            # 显示完整的历史记录，包含端口
+            if ':' in app_config.recent_hosts[0]:
+                self.host_combo.setCurrentText(app_config.recent_hosts[0])
+            else:
+                # 如果历史记录没有端口，添加默认端口
+                self.host_combo.setCurrentText(f"{app_config.recent_hosts[0]}:{app_config.port}")
+        else:
+            # 显示默认的地址和端口
+            self.host_combo.setCurrentText(f"{app_config.host}:{app_config.port}")
+
+        # 创建容器使输入框居中
+        host_container = QWidget()
+        host_layout = QHBoxLayout(host_container)
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.addWidget(self.host_combo, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        form_layout.addRow("地址端口:", host_container)
+        layout.addLayout(form_layout)
+
+        # 测试连接按钮
+        test_conn_btn = QPushButton("测试连接")
+        test_conn_btn.setStyleSheet("""
+            QPushButton {
+                background: #1a73e8;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 10px 20px;
+                font-weight: 500;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background: #1557b0;
+            }
+        """)
+        test_conn_btn.clicked.connect(lambda: self._test_connection_in_dialog(dialog))
+
+        # 将按钮放在容器中居中
+        btn_container = QWidget()
+        btn_layout = QHBoxLayout(btn_container)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.addWidget(test_conn_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(btn_container)
+
+        # 按钮框
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(lambda: self._apply_settings(dialog))
+        button_box.rejected.connect(dialog.reject)
+
+        # 将按钮框居中
+        button_container = QWidget()
+        button_container_layout = QHBoxLayout(button_container)
+        button_container_layout.setContentsMargins(0, 0, 0, 0)
+        button_container_layout.addWidget(button_box, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(button_container)
+
+        dialog.exec()
+
+    def _test_connection_in_dialog(self, dialog):
+        """在设置对话框中测试连接"""
+        text = self.host_combo.currentText().strip()
+        if not text:
+            QMessageBox.warning(dialog, "配置错误", "请输入服务器地址和端口")
+            return
+
+        # 解析地址和端口
+        if ':' in text:
+            parts = text.split(':')
+            if len(parts) != 2 or not parts[1].isdigit():
+                QMessageBox.warning(dialog, "配置错误", "地址格式应为 host:port (例如: 127.0.0.1:5000)")
+                return
+            host = parts[0].strip()
+            port = int(parts[1].strip())
+        else:
+            QMessageBox.warning(dialog, "配置错误", "请包含端口号 (例如: 127.0.0.1:5000)")
+            return
+
+        # 临时更新网络配置
+        old_host = self.network.server_info.host
+        old_port = self.network.server_info.port
+
+        self.network.server_info.host = host
+        self.network.server_info.port = port
+
+        if self.network.is_connected:
+            self.network.disconnect()
+
+        if self.network.connect():
+            QMessageBox.information(dialog, "连接成功", f"已连接到服务器 {host}:{port}")
+            # 保持连接状态
+        else:
+            QMessageBox.critical(dialog, "连接失败", f"无法连接到服务器 {host}:{port}")
+            # 恢复之前的配置
+            self.network.server_info.host = old_host
+            self.network.server_info.port = old_port
+
+    def _apply_settings(self, dialog):
+        """应用设置并保存到配置"""
+        text = self.host_combo.currentText().strip()
+        if not text:
+            QMessageBox.warning(dialog, "配置错误", "请输入服务器地址和端口")
+            return
+
+        # 解析地址和端口
+        if ':' in text:
+            parts = text.split(':')
+            if len(parts) != 2 or not parts[1].isdigit():
+                QMessageBox.warning(dialog, "配置错误", "地址格式应为 host:port (例如: 127.0.0.1:5000)")
+                return
+            host = parts[0].strip()
+            port = int(parts[1].strip())
+        else:
+            QMessageBox.warning(dialog, "配置错误", "请包含端口号 (例如: 127.0.0.1:5000)")
+            return
+
+        # 更新网络配置
+        if self.network.is_connected:
+            self.network.disconnect()
+
+        self.network.server_info.host = host
+        self.network.server_info.port = port
+
+        # 尝试连接
+        if self.network.connect():
+            # 保存到配置
+            app_config.host = host
+            app_config.port = port
+            app_config.add_to_history(f"{host}:{port}")  # 保存带端口的完整地址
+            app_config.save()
+
+            # 更新状态标签
+            self._update_status(True, f"已连接到服务器")
+            dialog.accept()
+        else:
+            QMessageBox.critical(dialog, "连接失败", f"无法连接到服务器 {host}:{port}")
+            self._update_status(False, f"连接失败: {host}:{port}")
 
     def _create_login_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 1, 0, 0)
         layout.setSpacing(12)
-        
+
         layout.addWidget(QLabel("登录您的账号"))
-        
-        # --- Server Settings Section ---
-        self.server_settings_group = QGroupBox("服务器设置")
-        self.server_settings_group.setCheckable(True)
-        self.server_settings_group.setChecked(False)
-        server_layout = QFormLayout()
-        
-        self.host_combo = QComboBox()
-        self.host_combo.setEditable(True)
-        self.host_combo.setPlaceholderText("服务器地址 (IP/域名)")
-        
-        # Populate history
-        if app_config.recent_hosts:
-            self.host_combo.addItems(app_config.recent_hosts)
-            self.host_combo.setCurrentText(app_config.recent_hosts[0])
-        else:
-            self.host_combo.setCurrentText(app_config.host)
-            
-        # Connect signal to handle "Host:Port" selection
-        self.host_combo.currentTextChanged.connect(self._on_host_changed)
-        
-        self.port_input = QLineEdit()
-        self.port_input.setPlaceholderText("端口")
-        self.port_input.setText(str(app_config.port))
-        
-        test_conn_btn = QPushButton("测试连接")
-        test_conn_btn.clicked.connect(self._ensure_connection)
-        
-        server_layout.addRow("地址:", self.host_combo)
-        server_layout.addRow("端口:", self.port_input)
-        server_layout.addRow("", test_conn_btn)
-        self.server_settings_group.setLayout(server_layout)
-        layout.addWidget(self.server_settings_group)
-        # -------------------------------
-        
+
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("用户名")
         if app_config.last_username:
             self.username_input.setText(app_config.last_username)
         layout.addWidget(self.username_input)
-        
+
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("密码")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.password_input)
-        
+
         login_btn = QPushButton("登录")
         login_btn.setObjectName("loginButton")
         login_btn.clicked.connect(self._do_login)
         layout.addWidget(login_btn)
-        
+
         # 邮箱验证码登录按钮
         email_login_btn = QPushButton("📧 使用邮箱验证码登录")
         email_login_btn.setObjectName("linkButton")
         email_login_btn.clicked.connect(lambda: self.stack.setCurrentIndex(3))
         layout.addWidget(email_login_btn)
-        
+
         # 忘记密码按钮
         forgot_btn = QPushButton("忘记密码")
         forgot_btn.setObjectName("linkButton")
         forgot_btn.clicked.connect(lambda: self.stack.setCurrentIndex(2))
         layout.addWidget(forgot_btn)
-        
+
         layout.addStretch()
-        
+
         reg_btn = QPushButton("没有账号？点击注册")
         reg_btn.setObjectName("linkButton")
         reg_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         layout.addWidget(reg_btn)
-        
+
         return page
 
     def _on_host_changed(self, text):
