@@ -147,8 +147,11 @@ class LoginDialog(QDialog):
         content_layout.setContentsMargins(40, 0, 40, 20)  # 左右边距40px，底部边距20px
         content_layout.setSpacing(16)
         
-        # Logo 图标
-        logo_layout = QHBoxLayout()
+        # Logo 图标 + 文字 (水平居中)
+        logo_container = QWidget()
+        logo_layout = QHBoxLayout(logo_container)
+        logo_layout.setContentsMargins(0, 0, 0, 0)
+        logo_layout.setSpacing(12)
         logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         icon_path = Path(__file__).parent.parent / "resources" / "icon.png"
@@ -156,15 +159,27 @@ class LoginDialog(QDialog):
             # 设置窗口图标
             self.setWindowIcon(QIcon(str(icon_path)))
             # Logo 图片
-            logo_pixmap = QPixmap(str(icon_path)).scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_pixmap = QPixmap(str(icon_path)).scaled(
+                56, 56, 
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
+            )
             logo_icon = QLabel()
             logo_icon.setPixmap(logo_pixmap)
-            content_layout.addWidget(logo_icon)
+            logo_layout.addWidget(logo_icon)
         
-        logo = QLabel("安全网盘")
-        logo.setObjectName("logoLabel")
+        logo_text = QLabel("安全网盘")
+        logo_text.setStyleSheet("""
+            QLabel {
+                font-size: 32px;
+                font-weight: bold;
+                color: white;
+                background: transparent;
+            }
+        """)
+        logo_layout.addWidget(logo_text)
         
-        content_layout.addWidget(logo)
+        content_layout.addWidget(logo_container, alignment=Qt.AlignmentFlag.AlignCenter)
         
         
         # 连接状态标签
