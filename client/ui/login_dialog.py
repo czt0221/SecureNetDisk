@@ -559,6 +559,9 @@ class LoginDialog(QDialog):
     
     def _request_recovery_code(self):
         """请求密码重置验证码"""
+        if not self._ensure_connection():
+            return
+            
         email = self.recovery_email_input.text().strip()
         if not email:
             QMessageBox.warning(self, "提示", "请输入邮箱")
@@ -584,6 +587,9 @@ class LoginDialog(QDialog):
     
     def _request_email_code(self):
         """请求发送验证码"""
+        if not self._ensure_connection():
+            return
+            
         email = self.email_input.text().strip()
         if not email:
             QMessageBox.warning(self, "提示", "请输入邮箱")
@@ -605,6 +611,9 @@ class LoginDialog(QDialog):
     
     def _do_email_login(self):
         """邮箱验证码登录"""
+        if not self._ensure_connection():
+            return
+            
         email = self.email_input.text().strip()
         code = self.email_code_input.text().strip()
         
@@ -658,36 +667,6 @@ class LoginDialog(QDialog):
         else:
             QMessageBox.critical(self, "错误", "密码错误，无法解锁密钥")
     
-    def _do_login(self):
-        username = self.username_input.text().strip()
-        password = self.password_input.text()
-        if not username or not password:
-            QMessageBox.warning(self, "提示", "请输入用户名和密码")
-            return
-        
-        # 使用 SHA-256 预哈希密码后再发送（避免明文传输）
-        from auth.password import PasswordManager
-        password_prehash = PasswordManager.prehash_password(password)
-        result = self.network.login_password(username, password_prehash)
-        
-        if result.get('success'):
-            if self.key_manager.unlock_with_password(password, result):
-                email = result.get('email', '')
-                # 检查是否需要询问信任设备（仅当该邮箱未信任时）
-                if self.device_trust and email and not self.device_trust.has_trusted_device(email):
-                    self._pending_trust_data = {
-                        'result': result,
-                        'email': email
-                    }
-                    self._ask_trust_device()
-                else:
-                    self.login_success.emit(result)
-                    self.accept()
-            else:
-                QMessageBox.critical(self, "错误", "密钥解锁失败")
-        else:
-            QMessageBox.critical(self, "错误", result.get('error', '登录失败'))
-    
     def _ask_trust_device(self):
         """询问是否信任设备"""
         reply = QMessageBox.question(
@@ -718,6 +697,9 @@ class LoginDialog(QDialog):
         self.accept()
     
     def _do_register(self):
+        if not self._ensure_connection():
+            return
+            
         username = self.reg_username.text().strip()
         email = self.reg_email.text().strip()
         password = self.reg_password.text()
@@ -762,6 +744,9 @@ class LoginDialog(QDialog):
     
     def _do_recovery(self):
         """执行密码恢复"""
+        if not self._ensure_connection():
+            return
+            
         new_password = self.new_password_input.text()
         confirm_password = self.confirm_password_input.text()
         
