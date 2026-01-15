@@ -3,7 +3,8 @@ from PyQt6.QtGui import QColor, QPainter, QLinearGradient, QPainterPath, QFont
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QWidget, QMessageBox, QStackedWidget,
-    QGroupBox, QFormLayout, QComboBox, QDialogButtonBox
+    QGroupBox, QFormLayout, QComboBox, QDialogButtonBox,
+    QFileDialog, QApplication
 )
 from PyQt6.QtGui import QIcon, QPixmap
 from pathlib import Path
@@ -1165,11 +1166,148 @@ class LoginDialog(QDialog):
         )
         
         if result.get('success'):
-            QMessageBox.information(self, "成功", 
-                f"注册成功！请保存恢复密钥:\n\n{reg_data['recovery_key']}")
+            # 显示恢复密钥对话框（带保存功能）
+            self._show_recovery_key_dialog(reg_data['recovery_key'])
             self.stack.setCurrentIndex(0)
         else:
             QMessageBox.critical(self, "错误", result.get('error', '注册失败'))
+    
+    def _show_recovery_key_dialog(self, recovery_key: str):
+        """显示恢复密钥对话框（带复制和保存功能）"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔑 保存恢复密钥")
+        dialog.setFixedSize(500, 350)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: white;
+            }
+            QLabel#title {
+                font-size: 18px;
+                font-weight: bold;
+                color: #1a73e8;
+            }
+            QLabel#warning {
+                color: #ea4335;
+                font-size: 12px;
+            }
+            QLineEdit {
+                padding: 12px;
+                font-size: 16px;
+                font-family: monospace;
+                background: #f8f9fa;
+                border: 2px solid #1a73e8;
+                border-radius: 8px;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(16)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # 标题
+        title = QLabel("✅ 注册成功！")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        # 说明
+        desc = QLabel("请妥善保存以下恢复密钥，这是恢复账户的方式：")
+        desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc)
+        
+        # 恢复密钥显示
+        key_display = QLineEdit(recovery_key)
+        key_display.setReadOnly(True)
+        key_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(key_display)
+        
+        # 警告
+        warning = QLabel("⚠️ 此密钥只显示一次，丢失后无法恢复！")
+        warning.setObjectName("warning")
+        warning.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(warning)
+        
+        layout.addSpacing(10)
+        
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        
+        # 复制按钮
+        copy_btn = QPushButton("📋 复制到剪贴板")
+        copy_btn.setStyleSheet("""
+            QPushButton {
+                background: #34a853;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 12px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #2d8f47;
+            }
+        """)
+        def copy_key():
+            QApplication.clipboard().setText(recovery_key)
+            copy_btn.setText("✅ 已复制")
+            QTimer.singleShot(2000, lambda: copy_btn.setText("📋 复制到剪贴板"))
+        copy_btn.clicked.connect(copy_key)
+        btn_layout.addWidget(copy_btn)
+        
+        # 保存到文件按钮
+        save_btn = QPushButton("💾 保存到文件")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background: #1a73e8;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 12px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #1557b0;
+            }
+        """)
+        def save_key():
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog, "保存恢复密钥", "安全网盘_恢复密钥.txt", "文本文件 (*.txt)"
+            )
+            if file_path:
+                try:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write("===== 安全网盘恢复密钥 =====\n\n")
+                        f.write(f"恢复密钥: {recovery_key}\n\n")
+                        f.write("请妥善保管此文件，切勿泄露给他人。\n")
+                        f.write("此密钥是恢复您账户的方式。\n")
+                    QMessageBox.information(dialog, "保存成功", f"恢复密钥已保存到:\n{file_path}")
+                except Exception as e:
+                    QMessageBox.critical(dialog, "保存失败", f"无法保存文件: {e}")
+        save_btn.clicked.connect(save_key)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # 确认按钮
+        ok_btn = QPushButton("我已保存，继续")
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background: #f1f3f4;
+                color: #5f6368;
+                border: none;
+                border-radius: 6px;
+                padding: 12px 20px;
+            }
+            QPushButton:hover {
+                background: #e8eaed;
+            }
+        """)
+        ok_btn.clicked.connect(dialog.accept)
+        layout.addWidget(ok_btn)
+        
+        dialog.exec()
     
     def _do_recovery(self):
         """执行密码恢复"""
@@ -1279,3 +1417,4 @@ class LoginDialog(QDialog):
             self.stack.setCurrentIndex(0)
         else:
             QMessageBox.critical(self, "错误", reset_result.get('error', '密码重置失败'))
+            
